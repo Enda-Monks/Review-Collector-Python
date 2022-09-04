@@ -67,15 +67,28 @@ def main_ms2():
                 type(result)
                 soup = bs4.BeautifulSoup(result.text, "lxml") # get html result for this page
                 
-                albumUrl = HOME_URL + albumHref
-                result = sess.get(albumUrl)
-                type(result)
-                soup = bs4.BeautifulSoup(result.text, "lxml") # get html result for this page
+                print(albumUrl) # debug
+                elements = soup.select('.error_code')
+                errorCode = None
+                if elements:
+                    errorCode = list(elements)[0].getText()
+                if errorCode and errorCode == "404":
+                    print("error found")
+                    continue
+
+                # albumUrl = HOME_URL + albumHref                    // redundant?
+                # result = sess.get(albumUrl)
+                # type(result)
+                # soup = bs4.BeautifulSoup(result.text, "lxml") # get html result for this page
 
                 # get album title
+                elements = None
                 elements = soup.select('div > a > span > h1')
-                title = list(elements)[0].getText()
-
+                if elements:
+                    title = list(elements)[0].getText()
+                else:
+                    continue
+                
                 # get album artist name
                 elements = soup.select('.band_name')
                 artist = list(elements)[0].getText()
