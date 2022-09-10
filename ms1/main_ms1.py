@@ -5,9 +5,9 @@
 #             - Print report to show how many links were collected
 # --------------------------------------------------------------------------------
 
-import requests # requires install
-import bs4 # requires install
-import json # requires install
+import requests 
+import bs4 
+import json
 
 from consts import *
 from utils import *
