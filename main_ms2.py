@@ -1,55 +1,61 @@
 # Project: Review Collector - Author: Enda Monks - Date of Completion: 2022-08-11
 # -------------------------------------------------------------------------------
-# Milestone 2 - Read list of links from JSON file and place in list
-#             - Prompt user to input a letter from the alphabet
+# Milestone 2 - Read urls from JSON file obtained in ms1 and place in list
+#             - Prompt user to input a letter from the alphabet or quit (Loop starts here)
 #             - Iterate through all album pages which begin with this letter
-#             - Scrape fields for Album and Review class properties
-#             - Write collection of Review objects to new local JSON file
+#             - Scrape fields for corresponding Album and Review class properties
+#             - Write collection of Album objects to new local JSON file (End of loop)
 # -------------------------------------------------------------------------------
-import requests # requires install
-import bs4 # requires install
-import json # requires install
-from marshmallow import pprint
+import requests
+import bs4
+import json
+import os.path
 from consts import *
 from utils import *
-from reviews.Review import Review
-from music.Album import Album, AlbumSchema
+from review.Review import Review
+from product.Album import Album, AlbumSchema
 
 def main_ms2():
     
     sess = requests.Session() 
     sess.headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.131 Safari/537.36'
 
-    # Get list of links from file
+    print()
+    print("Album Review Collector")
+    print("======================")
+
+    # Get list of urls from file
     f = open('json/albumHrefs.json')
     albumHrefs = json.load(f)
+    print('[' + str(len(albumHrefs)) + "] MetaCritic album urls succesfully loaded\n")
     f.close() 
-
-    print()
-    print("Album Review Scraper")
-    print("====================")
 
     exit = False
     while(not exit):
 
-        # Aquire user's selection
-        validInput = False
+        # prompt user to enter a letter or quit
+        validLetter = False
         exit = False
-        while (not validInput):
+        while (not validLetter):
             letter = input("Enter a letter or quit [0]: ")
-            if(letter.isalpha()):
+            if(letter.isalpha()): # a letter is entered
                 letter = letter.lower()
-                validInput = True
-            elif(int(letter) == 0):
+                if os.path.exists("json/" + letter + "_albums.json"):
+                    print("Error: Data for albums starting with [" + letter + "] already exists in local storage\n")
+                else:
+                    validLetter = True
+            elif(int(letter) == 0): # user has opted to quit
                 exit = True
-                validInput = True
-            else:
+                validLetter = True
+            else: # wrong input
                 print("Error: You must input one letter from the alphabet or zero\n")
-        if(exit == True):
-            continue
+            
+        if(exit == True): 
+            continue # end program
 
         albums:Album = []
-        # Get links for albums which start with letter input 
+
+        # get urls for all albums which start with valid letter input 
         currentHrefs = []
         for i in albumHrefs:
             if i.find("/music/" + letter, 0) != -1: 
@@ -64,26 +70,16 @@ def main_ms2():
                 # navigate to album specific page
                 albumUrl = HOME_URL + albumHref
                 result = sess.get(albumUrl)
+                if not result.ok: # 
+                    print("404 Request Url Error: [" + albumUrl + ']')
+                    print("---------")
+                    continue
                 type(result)
                 soup = bs4.BeautifulSoup(result.text, "lxml") # get html result for this page
-                
-                print(albumUrl) # debug
-                elements = soup.select('.error_code')
-                errorCode = None
-                if elements:
-                    errorCode = list(elements)[0].getText()
-                if errorCode and errorCode == "404":
-                    print("error found")
-                    continue
-
-                # albumUrl = HOME_URL + albumHref                    // redundant?
-                # result = sess.get(albumUrl)
-                # type(result)
-                # soup = bs4.BeautifulSoup(result.text, "lxml") # get html result for this page
 
                 # get album title
                 elements = None
-                elements = soup.select('div > a > span > h1')
+                elements = soup.select('div.product_title > a > span > h1')
                 if elements:
                     title = list(elements)[0].getText()
                 else:
@@ -171,14 +167,17 @@ def main_ms2():
                         for i in range(critRevCount):
                                 criticDates.append(None)
 
-                    # initialize collection of CriticReview objects
                     criticReviews:Review = []
 
                     for i in range(critRevCount):
-                        if not criticDates[i]:
+                        if not criticDates[i]: # account for reviews with no specified date
                             revTemp = Review("Critic", criticScores[i], C_SCORE_MAX, publications[i], criticContents[i], None)
                         else:
                             revTemp = Review("Critic", criticScores[i], C_SCORE_MAX, publications[i], criticContents[i], stringToDate(criticDates[i], DATE_FORMAT))
+                        #debug-
+                        revTemp.printSelf()
+                        print('-')
+                        #------
                         criticReviews.append(revTemp)
                     album.addReviews(criticReviews)
                 
@@ -189,30 +188,27 @@ def main_ms2():
                     # get total page count
                     if usrRevCount > REV_PER_PG:
                         pgCount = int(U_REV_MAX / REV_PER_PG)
-                        currentRevCount = REV_PER_PG
                     else:
                         pgCount = 1
-                        currentRevCount = usrRevCount # get review count for current page
 
                     while currentPg <= pgCount:
 
                         random_sleep(LIGHT_SLEEP)
-                        # Go to user review page and collect data
+                        # navigate to user review page
                         if currentPg == 1:
                             userUrl = HOME_URL + albumHref + "/user-reviews"
                         elif currentPg > 1:
                             userUrl = HOME_URL + albumHref + "/user-reviews" + "?page=" + str(currentPg - 1)
-                            currentRevCount = usrRevCount - (REV_PER_PG * (pgCount -1))
 
                         result = sess.get(userUrl)
                         type(result)
                         soup = bs4.BeautifulSoup(result.text, "lxml") # get html result for this page
             
-                        # extract UserReview data
+                        # extract user review data
                         
                         #score
                         userScores = []
-                        elements = soup.select('div.review_grade div.metascore_w')
+                        elements = soup.select('ol.user_reviews div.review_grade div.metascore_w')
                         for a in elements:
                             userScores.append(a.getText().strip())
 
@@ -228,11 +224,17 @@ def main_ms2():
                         for a in elements:
                             userDates.append(a.getText().strip())
 
-                        # initialize collection of UserReview objects
+                        currentRevCount = len(userScores) # Reviews extracted from current page
+
+                        # initialize collection of Review objects
                         userReviews:Review = []
 
                         for i in range(currentRevCount):
                             revTemp = Review("User", userScores[i], U_SCORE_MAX, SERVICE_NAME, userContents[i], stringToDate(userDates[i], DATE_FORMAT))
+                            #debug-
+                            revTemp.printSelf()
+                            print('-')
+                            #------
                             userReviews.append(revTemp)
                     
                         album.addReviews(userReviews)
@@ -242,7 +244,7 @@ def main_ms2():
                 # end of user rev block
 
                 # debug :
-                album.toString()
+                album.printSelf()
                 print("---------")
                 # -----------------
 
@@ -250,7 +252,7 @@ def main_ms2():
                 random_sleep(LIGHT_SLEEP)
 
             # end iteration for album
-            print("Total Albums collected for " + letter + ": ", len(albums))
+            print("Total Albums collected for [" + letter + "]: ", len(albums))
 
             # get schema result
             result = []
