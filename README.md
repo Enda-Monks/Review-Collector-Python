@@ -36,7 +36,7 @@ Assembles Collection of Critic &amp; User Reviews from the Web
 
 - import elasticbud seperately
 
-    pip install git+https://github.com/z-tasker/elasticbud.git
+    ```pip install git+https://github.com/z-tasker/elasticbud.git```
 
 
 
